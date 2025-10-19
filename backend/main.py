@@ -165,6 +165,184 @@ def chat_with_character(request: ChatRequest, db: Session = Depends(get_db)):
             model="openai/gpt-oss-20b",
             messages=messages,
             temperature=0.75,
+            max_tokens=500
+        )
+        ai_message = chat_completion.choices[0].message.content.strip()
+        
+        # TODO: Need to identify conversation_id in a real scenario
+        # For now, we'll need to pass conversation_id in the request
+        return {"reply": ai_message}
+    except Exception as e:
+        print(f"An error occurred with the AI model: {e}")
+        return {"error": "Failed to get response from AI"}, 500
+
+
+import os
+import requests
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from urllib.parse import quote
+from dotenv import load_dotenv
+from groq import Groq
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship, Session
+from datetime import datetime
+import base64
+import uuid
+
+# Load environment variables
+load_dotenv()
+
+# --- Database Setup ---
+SQLALCHEMY_DATABASE_URL = "sqlite:///./echosoul.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Database Models
+class Conversation(Base):
+    __tablename__ = "conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    character_name = Column(String, index=True)
+    character_description = Column(Text)
+    image_data = Column(Text)  # Store Base64 image data
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+class Message(Base):
+    __tablename__ = "messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"))
+    role = Column(String)  # "user" or "assistant"
+    content = Column(Text)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    conversation = relationship("Conversation", back_populates="messages")
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- FastAPI App Initialization ---
+app = FastAPI()
+
+# CORS Middleware: Allows the React frontend to communicate with this backend
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",  # Default Vite dev server port
+    "http://localhost:8080",
+    "http://localhost:8081",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- AI Client Initialization ---
+# Initialize the Groq client
+# The user will need to create a .env file in the 'backend' directory
+# with their GROQ_API_KEY
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY"),
+)
+if not os.getenv("GROQ_API_KEY"):
+    print("Warning: GROQ_API_KEY is not set. Please create a .env file in the 'backend' directory.")
+
+
+# --- Pydantic Models (for Request Bodies) ---
+class GenerateRequest(BaseModel):
+    name: str
+    description: str
+
+class ChatRequest(BaseModel):
+    character_data: dict
+    history: list[dict]
+
+class ChatMessageRequest(BaseModel):
+    user_message: str
+
+# --- API Endpoints ---
+
+@app.get("/api")
+def read_root():
+    return {"Hello": "World"}
+
+@app.post("/api/generate")
+def generate_image(request: GenerateRequest, db: Session = Depends(get_db)):
+    """
+    Generates an image based on the character description, encodes it as a Base64 Data URL.
+    """
+    print("Image generation request received...")
+    prompt_text = f"{request.name}, {request.description}"
+    encoded_prompt = quote(prompt_text)
+    image_url = f"https://pollinations.ai/p/{encoded_prompt}?width=512&height=512"
+    
+    try:
+        print(f"Fetching image from: {image_url}")
+        response = requests.get(image_url, timeout=180)
+        response.raise_for_status()
+
+        # Encode the image content into Base64
+        content_type = response.headers.get('Content-Type', 'image/jpeg')
+        base64_image = base64.b64encode(response.content).decode('utf-8')
+        data_url = f"data:{content_type};base64,{base64_image}"
+
+        # Save to database
+        db_conversation = Conversation(
+            character_name=request.name,
+            character_description=request.description,
+            image_data=data_url
+        )
+        db.add(db_conversation)
+        db.commit()
+        db.refresh(db_conversation)
+
+        print("Successfully encoded image to Base64 Data URL and saved to database.")
+        return {"image_url": data_url, "conversation_id": db_conversation.id}
+    except Exception as e:
+        print(f"Error during image fetching or encoding: {e}")
+        return {"error": "Failed to generate image"}, 500
+
+@app.post("/api/chat")
+def chat_with_character(request: ChatRequest, db: Session = Depends(get_db)):
+    """
+    Handles the chat logic, sending context to the AI model.
+    """
+    print("Chat request received...")
+    character_data = request.character_data
+    history = request.history
+
+    system_prompt = f"""
+    You are {character_data['name']}. Your personality, history, and appearance are defined by the following description:
+    ---
+    {character_data['description']}
+    ---
+    You must act and speak as this character at all times. Do not break character. Do not mention that you are an AI.
+    Be engaging and respond to the user in a natural way that is true to your character.
+    """
+    
+    messages = [{"role": "system", "content": system_prompt}] + history
+
+    try:
+        chat_completion = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=messages,
+            temperature=0.75,
             max_tokens=200
         )
         ai_message = chat_completion.choices[0].message.content.strip()
@@ -202,15 +380,53 @@ def send_message(conversation_id: int, request: ChatMessageRequest, db: Session 
     db.commit()
     db.refresh(user_message)
     
+    # --- Sentiment Analysis and Adaptive Response ---
+    # Prepare messages for sentiment analysis
+    sentiment_analysis_messages = [
+        {"role": "system", "content": "Analyze the sentiment of the following user message. Respond with a single word: positive, negative, neutral, sad, angry, happy, surprised, or fearful."},
+        {"role": "user", "content": request.user_message}
+    ]
+    
+    sentiment = "neutral" # Default sentiment
+    try:
+        sentiment_completion = client.chat.completions.create(
+            model="openai/gpt-oss-20b", # Using the same model for sentiment analysis
+            messages=sentiment_analysis_messages,
+            temperature=0.1,
+            max_tokens=5
+        )
+        sentiment = sentiment_completion.choices[0].message.content.strip().lower()
+        print(f"Detected sentiment: {sentiment}")
+    except Exception as e:
+        print(f"Error during sentiment analysis: {e}")
+
+    # Adapt system prompt based on sentiment
+    sentiment_adaptation = ""
+    if sentiment == "sad":
+        sentiment_adaptation = "The user seems sad. Respond with empathy and offer comfort."
+    elif sentiment == "angry":
+        sentiment_adaptation = "The user seems angry. Respond calmly and try to de-escalate."
+    elif sentiment == "happy":
+        sentiment_adaptation = "The user seems happy. Respond with enthusiasm."
+    elif sentiment == "fearful":
+        sentiment_adaptation = "The user seems fearful. Respond reassuringly."
+    elif sentiment == "surprised":
+        sentiment_adaptation = "The user seems surprised. Acknowledge their surprise."
+    elif sentiment == "positive":
+        sentiment_adaptation = "The user is positive. Maintain a positive and engaging tone."
+    elif sentiment == "negative":
+        sentiment_adaptation = "The user is negative. Try to understand their concerns and be supportive."
+
     # Build the history for the AI
     history = [{"role": msg.role, "content": msg.content} for msg in messages_in_db] + [{"role": "user", "content": request.user_message}]
     
-    # Prepare the system prompt
+    # Prepare the system prompt with sentiment adaptation
     system_prompt = f"""
     You are {conversation.character_name}. Your personality, history, and appearance are defined by the following description:
     ---
     {conversation.character_description}
     ---
+    {sentiment_adaptation}
     You must act and speak as this character at all times. Do not break character. Do not mention that you are an AI.
     Be engaging and respond to the user in a natural way that is true to your character.
     """
@@ -332,4 +548,5 @@ def test_image_save(request: GenerateRequest):
     except Exception as e:
         print(f"Error during image fetching or saving: {e}")
         return {"error": f"Failed to generate and save image: {str(e)}"}, 500
+
 
