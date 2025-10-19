@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+
+# Generated files
+character_image.png
+character_sheet.json
+*.log
+backend/echosoul.db
+backend/test
+
+# Environment
+.env

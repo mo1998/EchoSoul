@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoSoul - Vanilla</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="character-creation" class="view">
+            <h1>Create a New Character</h1>
+            <form id="character-form">
+                <input type="text" id="name" placeholder="Character Name" required>
+                <textarea id="description" placeholder="Character Description" required></textarea>
+                <button type="submit">Create Character</button>
+            </form>
+        </div>
+
+        <div id="dashboard-view" class.view"">
+            <h1>Conversations</h1>
+            <div id="conversations-list"></div>
+            <button id="new-character-btn">Create New Character</button>
+        </div>
+
+        <div id="chat-view" class="view">
+            <div id="chat-header">
+                <button id="back-to-dashboard">Back</button>
+                <img id="chat-character-avatar" src="" alt="Avatar">
+                <h2 id="chat-character-name"></h2>
+            </div>
+            <div id="chat-messages"></div>
+            <div id="chat-input">
+                <input type="text" id="message-input" placeholder="Type your message...">
+                <button id="send-message-btn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
