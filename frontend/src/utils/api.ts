@@ -24,6 +24,8 @@ const sendMessage = (conversationId: number, message: string) =>
     user_message: message 
   });
 
+const deleteConversation = (id: number) => apiClient.delete(`/conversations/${id}`);
+
 const testImage = (data: { name: string; description: string }) => 
   apiClient.post('/test-image', data);
 
@@ -32,6 +34,7 @@ export {
   getConversation,
   createCharacter,
   sendMessage,
+  deleteConversation,
   testImage
 };
 
