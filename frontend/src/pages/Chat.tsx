@@ -26,14 +26,31 @@ const Chat: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [characterVoice, setCharacterVoice] = useState<SpeechSynthesisVoice | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize speech recognition if available
+  // Initialize speech recognition and voices
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setVoiceEnabled(false);
     }
+
+    const loadVoices = () => {
+      const availableVoices = speechSynthesis.getVoices();
+      if (availableVoices.length > 0) {
+        setVoices(availableVoices);
+      }
+    };
+
+    // Load voices initially and on change
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -52,6 +69,37 @@ const Chat: React.FC = () => {
 
     fetchConversation();
   }, [id, navigate]);
+
+  useEffect(() => {
+    if (conversation && voices.length > 0 && !characterVoice) {
+      const maleVoiceNames = ['Microsoft David - English (United States)', 'Microsoft Mark - English (United States)', 'Microsoft William Online (Natural) - English (Australia)', 'Microsoft Liam Online (Natural) - English (Canada)', 'Microsoft Sam Online (Natural) - English (Hongkong)', 'Microsoft Prabhat Online (Natural) - English (India)', 'Microsoft Connor Online (Natural) - English (Ireland)', 'Microsoft Chilemba Online (Natural) - English (Kenya)', 'Microsoft Mitchell Online (Natural) - English (New Zealand)', 'Microsoft Abeo Online (Natural) - English (Nigeria)', 'Microsoft James Online (Natural) - English (Philippines)', 'Microsoft Wayne Online (Natural) - English (Singapore)', 'Microsoft AndrewMultilingual Online (Natural) - English (United States)', 'Microsoft BrianMultilingual Online (Natural) - English (United States)', 'Microsoft Andrew Online (Natural) - English (United States)', 'Microsoft Brian Online (Natural) - English (United States)', 'Microsoft Luke Online (Natural) - English (South Africa)', 'Microsoft Elimu Online (Natural) - English (Tanzania)', 'Microsoft Ryan Online (Natural) - English (United Kingdom)', 'Microsoft Thomas Online (Natural) - English (United Kingdom)', 'Microsoft Christopher Online (Natural) - English (United States)', 'Microsoft Eric Online (Natural) - English (United States)', 'Microsoft Guy Online (Natural) - English (United States)', 'Microsoft Roger Online (Natural) - English (United States)', 'Microsoft Steffan Online (Natural) - English (United States)'];
+      const femaleVoiceNames = ['Microsoft Zira - English (United States)', 'Microsoft Natasha Online (Natural) - English (Australia)', 'Microsoft Clara Online (Natural) - English (Canada)', 'Microsoft Yan Online (Natural) - English (Hong Kong SAR)', 'Microsoft Neerja Online (Natural) - English (India) (Preview)', 'Microsoft Neerja Online (Natural) - English (India)', 'Microsoft Emily Online (Natural) - English (Ireland)', 'Microsoft Asilia Online (Natural) - English (Kenya)', 'Microsoft Molly Online (Natural) - English (New Zealand)', 'Microsoft Ezinne Online (Natural) - English (Nigeria)', 'Microsoft Rosa Online (Natural) - English (Philippines)', 'Microsoft Luna Online (Natural) - English (Singapore)', 'Microsoft AvaMultilingual Online (Natural) - English (United States)', 'Microsoft EmmaMultilingual Online (Natural) - English (United States)', 'Microsoft Ava Online (Natural) - English (United States)', 'Microsoft Emma Online (Natural) - English (United States)', 'Microsoft Leah Online (Natural) - English (South Africa)', 'Microsoft Imani Online (Natural) - English (Tanzania)', 'Microsoft Libby Online (Natural) - English (United Kingdom)', 'Microsoft Maisie Online (Natural) - English (United Kingdom)', 'Microsoft Sonia Online (Natural) - English (United Kingdom)', 'Microsoft Ana Online (Natural) - English (United States)', 'Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Jenny Online (Natural) - English (United States)', 'Microsoft Michelle Online (Natural) - English (United States)'];
+
+      const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+      let availableVoices: SpeechSynthesisVoice[] = [];
+
+      console.log("Gender:",conversation.gender)
+
+      if (conversation.gender === 'male') {
+        availableVoices = englishVoices.filter(voice => maleVoiceNames.includes(voice.name));
+        if (availableVoices.length === 0) {
+          availableVoices = englishVoices.filter(voice => voice.name.toLowerCase().includes('male'));
+        }
+      } else if (conversation.gender === 'female') {
+        availableVoices = englishVoices.filter(voice => femaleVoiceNames.includes(voice.name));
+        if (availableVoices.length === 0) {
+          availableVoices = englishVoices.filter(voice => voice.name.toLowerCase().includes('female'));
+        }
+      }
+
+      if (availableVoices.length > 0) {
+        const randomIndex = Math.floor(Math.random() * availableVoices.length);
+        setCharacterVoice(availableVoices[randomIndex]);
+      } else {
+        setCharacterVoice(englishVoices[0]);
+      }
+    }
+  }, [conversation, voices, characterVoice]);
 
   useEffect(() => {
     scrollToBottom();
@@ -161,22 +209,24 @@ const Chat: React.FC = () => {
 
   // Text-to-speech functionality
   const speakText = (text: string) => {
-    if (!text) return;
-    
+    if (!text || !conversation || !characterVoice) return;
+
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = characterVoice;
+      console.log("Selected voice:", characterVoice.name);
+
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
-      
+
       utterance.onend = () => {
         setIsPlaying(false);
       };
-      
+
       speechSynthesis.speak(utterance);
       setIsPlaying(true);
-      
-      // Stop if user clicks again
+
       utterance.onstart = () => {
         setIsPlaying(true);
       };
@@ -274,13 +324,13 @@ const Chat: React.FC = () => {
                 </div>
                 ))}
                 {isLoading && (
-                <div className="message assistant">
+                <div key="loading" className="message assistant">
                     <img src={conversation.image_data} alt={conversation.character_name} />
                     <div className="content">
                     <div className="typing-indicator">
-                        <span></span>
-                        <span></span>
-                        <span></span>
+                        <span key="dot1"></span>
+                        <span key="dot2"></span>
+                        <span key="dot3"></span>
                     </div>
                     </div>
                 </div>

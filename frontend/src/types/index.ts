@@ -9,6 +9,7 @@ export interface Conversation {
   id: number;
   character_name: string;
   character_description: string;
+  gender?: string;
   image_data: string;
   created_at: string;
   messages: Message[];
