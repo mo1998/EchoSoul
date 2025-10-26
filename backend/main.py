@@ -75,6 +75,7 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:5174",
     "http://localhost:8080",
     "http://localhost:8081",
 ]
@@ -176,38 +177,56 @@ def send_message(conversation_id: int, request: ChatMessageRequest, db: Session 
     conversation_text = "\n".join([f"{msg.role}: {msg.content}" for msg in reversed(conversation_history)])
 
     memory_extraction_prompt = f"""
-    You are a memory extraction assistant. Based on the following conversation, extract key facts, traits, and emotional notes about the character '{character.name}'.
-    Present these as a JSON object with keys like "newly_learned_facts", "emotional_state", "personality_traits".
-    
+    Analyze the following conversation involving the character '{character.name}'. Your task is to extract key information and present it ONLY as a JSON object. Do not include any explanatory text before or after the JSON.
+
+    The JSON object should have the following keys:
+    - "newly_learned_facts": A list of new facts learned about the character.
+    - "emotional_state": A brief description of the character's current emotional state.
+    - "personality_traits": Any new personality traits observed.
+
     Conversation:
     {conversation_text}
+
+    JSON output:
     """
 
     try:
         memory_completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": memory_extraction_prompt}],
             temperature=0.2,
             max_tokens=300
         )
         extracted_memory_str = memory_completion.choices[0].message.content.strip()
         
-        try:
-            extracted_memory = json.loads(extracted_memory_str)
-            
-            adaptive_memory = json.loads(character.adaptive_memory)
-            for key, value in extracted_memory.items():
-                if key in adaptive_memory and isinstance(adaptive_memory[key], list):
-                    adaptive_memory[key].extend(value)
+        if extracted_memory_str:
+            try:
+                # Find the JSON object within the string
+                match = re.search(r'\{.*\}', extracted_memory_str, re.DOTALL)
+                if match:
+                    json_str = match.group(0)
+                    extracted_memory = json.loads(json_str)
+                    
+                    adaptive_memory = json.loads(character.adaptive_memory)
+                    for key, value in extracted_memory.items():
+                        if key in adaptive_memory and isinstance(adaptive_memory[key], list):
+                            # Avoid duplicates
+                            for item in value:
+                                if item not in adaptive_memory[key]:
+                                    adaptive_memory[key].append(item)
+                        else:
+                            adaptive_memory[key] = value
+                    
+                    character.adaptive_memory = json.dumps(adaptive_memory, indent=4)
+                    db.commit()
+                    print("Successfully updated adaptive memory.")
                 else:
-                    adaptive_memory[key] = value
-            
-            character.adaptive_memory = json.dumps(adaptive_memory, indent=4)
-            db.commit()
-            print("Successfully updated adaptive memory.")
+                    print(f"No JSON object found in memory extraction output: {extracted_memory_str}")
 
-        except json.JSONDecodeError:
-            print(f"Could not decode JSON from memory extraction: {extracted_memory_str}")
+            except json.JSONDecodeError:
+                print(f"Could not decode JSON from memory extraction: {extracted_memory_str}")
+        else:
+            print("Memory extraction returned an empty string. Skipping memory update.")
 
     except Exception as e:
         print(f"Error during memory extraction: {e}")
@@ -226,7 +245,7 @@ def send_message(conversation_id: int, request: ChatMessageRequest, db: Session 
     
     try:
         chat_completion = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="llama-3.1-8b-instant",
             messages=messages,
             temperature=0.75,
             max_tokens=500

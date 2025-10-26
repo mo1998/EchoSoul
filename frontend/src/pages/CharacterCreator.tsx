@@ -142,7 +142,7 @@ const CharacterCreator: React.FC = () => {
               <img src={previewImage} alt="Character preview" />
             ) : (
               <div className="empty-preview">
-                <SparklesIcon style={{width: '64px', height: '64px'}} />
+                <SparklesIcon className="icon" style={{width: '64px', height: '64px'}} />
                 <p>Enter a character description to see a preview</p>
               </div>
             )}

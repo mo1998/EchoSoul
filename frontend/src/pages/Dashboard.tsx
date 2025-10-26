@@ -44,8 +44,10 @@ const Dashboard: React.FC = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>EchoSoul Conversations</h1>
-        <p>Chat with your AI characters and continue past conversations</p>
+        <div>
+          <h1>EchoSoul Conversations</h1>
+          <p className="subtitle">Chat with your AI characters and continue past conversations</p>
+        </div>
         <div className="dashboard-actions">
           <ThemeToggle />
           <Link to="/create" className="btn">
@@ -57,7 +59,7 @@ const Dashboard: React.FC = () => {
 
       {conversations.length === 0 ? (
         <div className="no-conversations">
-          <ChatBubbleLeftRightIcon style={{width: '64px', height: '64px'}} />
+          <ChatBubbleLeftRightIcon className="icon" style={{width: '64px', height: '64px'}} />
           <h2>No conversations yet</h2>
           <p>Create your first character to start chatting!</p>
           <Link to="/create" className="btn">
@@ -76,7 +78,7 @@ const Dashboard: React.FC = () => {
                     />
                     <span className="conversation-name">{conversation.character_name}</span>
                 </Link>
-              <button onClick={() => handleDelete(conversation.id)} className="delete-btn">Delete</button>
+              <button onClick={() => handleDelete(conversation.id)} className="btn delete-btn">Delete</button>
             </li>
           ))}
         </ul>

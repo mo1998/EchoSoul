@@ -1,7 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap');
+
+:root {
+    --glow-blue: #00e5ff;
+    --glow-magenta: #ff00ff;
+    --dark-bg: #020412;
+    --panel-bg: rgba(10, 20, 40, 0.5);
+    --panel-border: rgba(0, 229, 255, 0.2);
+    --text-color: #e0e0ff;
+    --text-glow-blue: 0 0 3px #00e5ff, 0 0 6px #00e5ff;
+    --text-glow-magenta: 0 0 3px #ff00ff, 0 0 6px #ff00ff;
+}
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Roboto', sans-serif;
     margin: 0;
     background-color: #f0f2f5;
     color: #1a1a2e;
@@ -11,12 +22,27 @@ body {
 }
 
 body.dark {
-    background-color: #1a1a2e;
-    color: #e0e0e0;
+    background-color: var(--dark-bg);
+    background-image: 
+        radial-gradient(ellipse at 10% 15%, hsla(280, 100%, 50%, 0.2) 0px, transparent 40%),
+        radial-gradient(ellipse at 80% 25%, hsla(210, 100%, 50%, 0.3) 0px, transparent 40%),
+        radial-gradient(ellipse at 70% 85%, hsla(320, 100%, 50%, 0.25) 0px, transparent 40%),
+        radial-gradient(ellipse at 20% 90%, hsla(190, 100%, 50%, 0.25) 0px, transparent 40%);
+    background-attachment: fixed;
+    color: var(--text-color);
 }
 
 #root {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', sans-serif;
+}
+
+body.dark h1, body.dark h2 {
+    color: #fff;
+    text-shadow: var(--text-glow-blue);
 }
