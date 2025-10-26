@@ -7,7 +7,8 @@ import {
   SpeakerWaveIcon, 
   SpeakerXMarkIcon,
   Cog6ToothIcon,
-  ArrowUpTrayIcon
+  ArrowUpTrayIcon,
+  ArrowDownIcon
 } from '@heroicons/react/24/outline';
 import type { Message, Conversation } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -28,8 +29,11 @@ const Chat: React.FC = () => {
   const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [characterVoice, setCharacterVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [stickToBottom, setStickToBottom] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
 
   // Initialize speech recognition and voices
   useEffect(() => {
@@ -102,31 +106,50 @@ const Chat: React.FC = () => {
   }, [conversation, voices, characterVoice]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (stickToBottom) {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.role === 'assistant') {
+            const lastMessageElement = messageRefs.current[lastMessage.id];
+            lastMessageElement?.scrollIntoView({ behavior: 'auto', block: 'start' });
+        } else {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        }
+    }
+  }, [messages, stickToBottom]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  };
+
+  const handleScroll = () => {
+    const container = chatContainerRef.current;
+    if (container) {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const atBottom = scrollHeight - scrollTop - clientHeight <= 5;
+      setStickToBottom(atBottom);
+    }
   };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
+    const messageToSend = inputMessage;
+
+    setStickToBottom(true);
+
     const userMessage: Message = {
       id: Date.now(),
       role: 'user',
-      content: inputMessage,
+      content: messageToSend,
       timestamp: new Date().toISOString(),
     };
 
-    // Add user message to UI immediately
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
 
     try {
-      const response = await sendMessage(Number(id), inputMessage);
+      const response = await sendMessage(Number(id), messageToSend);
       
       const aiMessage: Message = {
         id: response.data.message_id,
@@ -135,7 +158,7 @@ const Chat: React.FC = () => {
         timestamp: new Date().toISOString(),
       };
 
-      setMessages([...updatedMessages, aiMessage]);
+      setMessages(prev => [...prev, aiMessage]);
       
       // Play text-to-speech if enabled
       if (textToSpeechEnabled && 'speechSynthesis' in window) {
@@ -150,7 +173,7 @@ const Chat: React.FC = () => {
         content: "Sorry, I couldn't process your message. Please try again.",
         timestamp: new Date().toISOString(),
       };
-      setMessages([...updatedMessages, errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -314,9 +337,9 @@ const Chat: React.FC = () => {
                 </div>
             )}
 
-            <div className="chat-messages">
+            <div className="chat-messages" ref={chatContainerRef} onScroll={handleScroll}>
                 {messages.map((message) => (
-                <div key={message.id} className={`message ${message.role}`}>
+                <div key={message.id} className={`message ${message.role}`} ref={el => { messageRefs.current[message.id] = el; }}>
                     {message.role === 'assistant' && <img src={conversation.image_data} alt={conversation.character_name} />}
                     <div className="content">
                     <ReactMarkdown>{message.content}</ReactMarkdown>
@@ -337,6 +360,18 @@ const Chat: React.FC = () => {
                 )}
                 <div ref={messagesEndRef} />
             </div>
+
+            {!stickToBottom && (
+                <button 
+                    onClick={() => {
+                        scrollToBottom();
+                        setStickToBottom(true);
+                    }}
+                    className="btn scroll-to-bottom-btn"
+                >
+                    <ArrowDownIcon style={{width: '20px', height: '20px'}}/>
+                </button>
+            )}
 
             <div className="chat-input">
                 <input

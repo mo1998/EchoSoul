@@ -322,3 +322,16 @@
     margin-bottom: 20px;
     filter: drop-shadow(0 0 10px var(--glow-blue));
 }
+
+.scroll-to-bottom-btn {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    border-radius: 50%;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+}
