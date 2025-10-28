@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PlusIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
-import type { Conversation } from '../types';
-import { getConversations, deleteConversation } from '../utils/api';
+import type { Conversation, World } from '../types';
+import { getConversations, deleteConversation, getAllWorlds, deleteWorld } from '../utils/api';
 import ThemeToggle from '../components/ThemeToggle';
 
 const Dashboard: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [worlds, setWorlds] = useState<World[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchConversations = async () => {
@@ -15,21 +16,42 @@ const Dashboard: React.FC = () => {
       setConversations(response.data);
     } catch (error) {
       console.error('Error fetching conversations:', error);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchWorlds = async () => {
+    try {
+      const response = await getAllWorlds();
+      setWorlds(response.data);
+    } catch (error) {
+      console.error('Error fetching worlds:', error);
     }
   };
 
   useEffect(() => {
-    fetchConversations();
+    const fetchData = async () => {
+      setLoading(true);
+      await Promise.all([fetchConversations(), fetchWorlds()]);
+      setLoading(false);
+    };
+    fetchData();
   }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDeleteConversation = async (id: number) => {
     try {
       await deleteConversation(id);
       fetchConversations();
     } catch (error) {
       console.error('Error deleting conversation:', error);
+    } 
+  };
+
+  const handleDeleteWorld = async (id: number) => {
+    try {
+      await deleteWorld(id);
+      fetchWorlds();
+    } catch (error) {
+      console.error('Error deleting world:', error);
     }
   };
 
@@ -54,6 +76,10 @@ const Dashboard: React.FC = () => {
             <PlusIcon style={{width: '20px', height: '20px'}} />
             Create New Character
           </Link>
+          <Link to="/create-world" className="btn">
+            <PlusIcon style={{width: '20px', height: '20px'}} />
+            Create New World
+          </Link>
         </div>
       </div>
 
@@ -73,16 +99,52 @@ const Dashboard: React.FC = () => {
                 <Link to={`/chat/${conversation.id}`} className="conversation-link">
                     <img 
                         src={conversation.image_data} 
-                        alt={conversation.character_name} 
+                        alt={conversation.character.name} 
                         style={{width: '30px', height: '30px', borderRadius: '50%', marginRight: '15px'}}
                     />
-                    <span className="conversation-name">{conversation.character_name}</span>
+                    <span className="conversation-name">{conversation.character.name}</span>
                 </Link>
-              <button onClick={() => handleDelete(conversation.id)} className="btn delete-btn">Delete</button>
+              <button onClick={() => handleDeleteConversation(conversation.id)} className="btn delete-btn">Delete</button>
             </li>
           ))}
         </ul>
       )}
+
+      <div className="dashboard-header" style={{marginTop: '40px'}}>
+        <div>
+          <h1>EchoSoul Worlds</h1>
+          <p className="subtitle">Create shared environments for multiple characters to interact</p>
+        </div>
+      </div>
+
+      {worlds.length === 0 ? (
+        <div className="no-conversations">
+          <ChatBubbleLeftRightIcon className="icon" style={{width: '64px', height: '64px'}} />
+          <h2>No worlds yet</h2>
+          <p>Create your first world to start multi-character conversations!</p>
+          <Link to="/create-world" className="btn">
+            Create World
+          </Link>
+        </div>
+      ) : (
+        <ul className="conversation-list"> {/* Re-using conversation-list for styling */}
+          {worlds.map((world) => (
+            <li key={world.id} className="conversation-item">
+              <Link to={`/world/${world.id}`} className="conversation-link">
+                {/* World might not have a single image, could display first character's image or a generic icon */}
+                <img 
+                  src={world.characters.length > 0 ? world.characters[0].image_data : '/vite.svg'} 
+                  alt={world.name} 
+                  style={{width: '30px', height: '30px', borderRadius: '50%', marginRight: '15px'}}
+                />
+                <span className="conversation-name">{world.name}</span>
+              </Link>
+              <button onClick={() => handleDeleteWorld(world.id)} className="btn delete-btn">Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
     </div>
   );
 };

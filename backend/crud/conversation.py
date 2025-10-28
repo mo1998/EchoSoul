@@ -1,13 +1,13 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from database.models import Conversation, Message, Character
 from schemas.conversation import ConversationCreate
 from schemas.message import MessageCreateRequest
 
 def get_conversation(db: Session, conversation_id: int):
-    return db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    return db.query(Conversation).options(joinedload(Conversation.character)).filter(Conversation.id == conversation_id).first()
 
 def get_conversations(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Conversation).offset(skip).limit(limit).all()
+    return db.query(Conversation).options(joinedload(Conversation.character)).offset(skip).limit(limit).all()
 
 def create_conversation(db: Session, conversation: ConversationCreate):
     db_conversation = Conversation(character_id=conversation.character_id, image_data=conversation.image_data)

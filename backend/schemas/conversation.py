@@ -17,7 +17,6 @@ class ConversationResponse(ConversationBase):
     created_at: datetime
     character: CharacterResponse
     messages: List[MessageResponse] = []
-    gender: Optional[str] = None
 
     class Config:
         orm_mode = True

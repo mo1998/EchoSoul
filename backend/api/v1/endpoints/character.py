@@ -58,6 +58,12 @@ def generate_character_with_image(request: CharacterCreate, db: Session = Depend
 
         image_data_url = f"data:{response.headers.get('Content-Type', 'image/jpeg')};base64,{base64.b64encode(response.content).decode('utf-8')}"
         
+        # Update the character with the generated image data
+        db_character.image_data = image_data_url
+        db.add(db_character)
+        db.commit()
+        db.refresh(db_character)
+
         db_conversation = crud_conversation.create_conversation(
             db, 
             conversation=ConversationCreate(character_id=db_character.id, image_data=image_data_url)

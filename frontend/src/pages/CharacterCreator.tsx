@@ -57,10 +57,10 @@ const CharacterCreator: React.FC = () => {
 
     try {
       setIsGenerating(true);
-      const response = await createCharacter({ name, description });
+      const response = await createCharacter({ name, core_memory: description });
       
       // Navigate to the chat page with the new conversation ID
-      navigate(`/chat/${response.data.conversation_id}`);
+      navigate(`/chat/${response.data.id}`);
     } catch (err) {
       console.error('Error creating character:', err);
       setError('Failed to create character. Please try again.');

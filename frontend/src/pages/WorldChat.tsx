@@ -10,15 +10,17 @@ import {
   ArrowUpTrayIcon,
   ArrowDownIcon
 } from '@heroicons/react/24/outline';
-import type { Message, Conversation } from '../types';
+import type { Message, World, Character } from '../types'; // Assuming World and Character types exist
 import ReactMarkdown from 'react-markdown';
-import { getConversation, sendMessage } from '../utils/api';
+import { getWorld, sendWorldMessage } from '../utils/api';
 import ThemeToggle from '../components/ThemeToggle';
 
-const Chat: React.FC = () => {
+const sum = (arr: number[]) => arr.reduce((acc, curr) => acc + curr, 0);
+
+const WorldChat: React.FC = () => { 
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [world, setWorld] = useState<World | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +30,7 @@ const Chat: React.FC = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [characterVoice, setCharacterVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [characterVoices, setCharacterVoices] = useState<{[key: number]: SpeechSynthesisVoice | null}>({});
   const [stickToBottom, setStickToBottom] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,42 +60,69 @@ const Chat: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !/^[0-9]+$/.test(id)) {
+      console.error('Invalid or missing world ID in URL:', id);
+      navigate('/');
+      return;
+    }
+    const worldId = Number(id);
     
-    const fetchConversation = async () => {
+    const fetchWorld = async () => {
+      if (isNaN(worldId)) {
+        console.error('Invalid world ID for fetchWorld:', id);
+        navigate('/');
+        return;
+      }
       try {
-        const response = await getConversation(Number(id));
-        setConversation(response.data);
+        const response = await getWorld(worldId);
+        setWorld(response.data);
         setMessages(response.data.messages);
       } catch (error) {
-        console.error('Error fetching conversation:', error);
+        console.error('Error fetching world:', error);
         navigate('/');
       }
     };
 
-    fetchConversation();
+    fetchWorld();
   }, [id, navigate]);
 
   useEffect(() => {
-    if (conversation && voices.length > 0 && !characterVoice) {
+    if (world && voices.length > 0) {
+      const newCharacterVoices: {[key: number]: SpeechSynthesisVoice | null} = {};
+      const maleVoiceNames = ['Microsoft David - English (United States)', 'Microsoft Mark - English (United States)', 'Microsoft William Online (Natural) - English (Australia)', 'Microsoft Liam Online (Natural) - English (Canada)', 'Microsoft Sam Online (Natural) - English (Hongkong)', 'Microsoft Prabhat Online (Natural) - English (India)', 'Microsoft Connor Online (Natural) - English (Ireland)', 'Microsoft Chilemba Online (Natural) - English (Kenya)', 'Microsoft Mitchell Online (Natural) - English (New Zealand)', 'Microsoft Abeo Online (Natural) - English (Nigeria)', 'Microsoft James Online (Natural) - English (Philippines)', 'Microsoft Wayne Online (Natural) - English (Singapore)', 'Microsoft AndrewMultilingual Online (Natural) - English (United States)', 'Microsoft BrianMultilingual Online (Natural) - English (United States)', 'Microsoft Andrew Online (Natural) - English (United States)', 'Microsoft Brian Online (Natural) - English (United States)', 'Microsoft Luke Online (Natural) - English (South Africa)', 'Microsoft Elimu Online (Natural) - English (Tanzania)', 'Microsoft Ryan Online (Natural) - English (United Kingdom)', 'Microsoft Thomas Online (Natural) - English (United Kingdom)', 'Microsoft Christopher Online (Natural) - English (United States)', 'Microsoft Eric Online (Natural) - English (United States)', 'Microsoft Guy Online (Natural) - English (United States)', 'Microsoft Roger Online (Natural) - English (United States)', 'Microsoft Steffan Online (Natural) - English (United States)'];
+      const femaleVoiceNames = ['Microsoft Zira - English (United States)', 'Microsoft Natasha Online (Natural) - English (Australia)', 'Microsoft Clara Online (Natural) - English (Canada)', 'Microsoft Yan Online (Natural) - English (Hong Kong SAR)', 'Microsoft Neerja Online (Natural) - English (India) (Preview)', 'Microsoft Neerja Online (Natural) - English (India)', 'Microsoft Emily Online (Natural) - English (Ireland)', 'Microsoft Asilia Online (Natural) - English (Kenya)', 'Microsoft Molly Online (Natural) - English (New Zealand)', 'Microsoft Ezinne Online (Natural) - English (Nigeria)', 'Microsoft Rosa Online (Natural) - English (Philippines)', 'Microsoft Luna Online (Natural) - English (Singapore)', 'Microsoft AvaMultilingual Online (Natural) - English (United States)', 'Microsoft EmmaMultilingual Online (Natural) - English (United States)', 'Microsoft Ava Online (Natural) - English (United States)', 'Microsoft Emma Online (Natural) - English (United States)', 'Microsoft Leah Online (Natural) - English (South Africa)', 'Microsoft Imani Online (Natural) - English (Tanzania)', 'Microsoft Libby Online (Natural) - English (United Kingdom)', 'Microsoft Maisie Online (Natural) - English (United Kingdom)', 'Microsoft Sonia Online (Natural) - English (United Kingdom)', 'Microsoft Ana Online (Natural) - English (United States)', 'Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Jenny Online (Natural) - English (United States)', 'Microsoft Michelle Online (Natural) - English (United States)'];
+
       const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
-      let selectedVoice: SpeechSynthesisVoice | null = null;
 
-      // 1. Prioritize voice_id from backend
-      if (conversation.character.voice_id) {
-        selectedVoice = englishVoices.find(voice => voice.name === conversation.character.voice_id) || null;
-      }
+      world.characters.forEach(char => {
+        let selectedVoice: SpeechSynthesisVoice | null = null;
+        const description = char.core_memory.toLowerCase();
+        
+        const male_keywords = ['male', 'man', 'boy', 'he', 'his', 'him', 'father', 'son', 'brother', 'uncle', 'nephew', 'king', 'prince'];
+        const female_keywords = ['female', 'woman', 'girl', 'she', 'her', 'hers', 'mother', 'daughter', 'sister', 'aunt', 'niece', 'queen', 'princess'];
 
-      // 2. Fallback to first English voice if no specific voice or gender-based voice found
-      if (!selectedVoice && englishVoices.length > 0) {
-        selectedVoice = englishVoices[0];
-      }
-      
-      if (selectedVoice) {
-        setCharacterVoice(selectedVoice);
-      }
+        const male_score = sum(male_keywords.map(word => (description.match(new RegExp(`\b${word}\b`, 'gi')) || []).length));
+        const female_score = sum(female_keywords.map(word => (description.match(new RegExp(`\b${word}\b`, 'gi')) || []).length));
+
+        let gender = "neutral";
+        if (male_score > female_score) {
+            gender = "male";
+        } else if (female_score > male_score) {
+            gender = "female";
+        }
+
+        if (gender === 'male') {
+          selectedVoice = englishVoices.find(voice => maleVoiceNames.includes(voice.name)) || englishVoices.find(voice => voice.name.toLowerCase().includes('male')) || englishVoices[0];
+        } else if (gender === 'female') {
+          selectedVoice = englishVoices.find(voice => femaleVoiceNames.includes(voice.name)) || englishVoices.find(voice => voice.name.toLowerCase().includes('female')) || englishVoices[0];
+        } else {
+          selectedVoice = englishVoices[Math.floor(Math.random() * englishVoices.length)];
+        }
+        newCharacterVoices[char.id] = selectedVoice;
+      });
+      setCharacterVoices(newCharacterVoices);
     }
-  }, [conversation, voices, characterVoice]);
+  }, [world, voices]);
 
   useEffect(() => {
     if (stickToBottom) {
@@ -123,6 +152,16 @@ const Chat: React.FC = () => {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
+    if (!id) {
+      console.error('World ID is undefined. Cannot send message.');
+      return;
+    }
+    const worldId = Number(id);
+    if (isNaN(worldId)) {
+      console.error('Invalid world ID:', id, '. Cannot send message.');
+      return;
+    }
+
     const messageToSend = inputMessage;
 
     setStickToBottom(true);
@@ -132,6 +171,7 @@ const Chat: React.FC = () => {
       role: 'user',
       content: messageToSend,
       timestamp: new Date().toISOString(),
+      character_id: null, // User message, no character_id
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -139,20 +179,21 @@ const Chat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await sendMessage(Number(id), messageToSend);
+      const response = await sendWorldMessage(worldId, messageToSend);
       
       const aiMessage: Message = {
         id: response.data.id,
         role: 'assistant',
         content: response.data.content,
         timestamp: new Date().toISOString(),
+        character_id: response.data.character_id,
       };
-
       setMessages(prev => [...prev, aiMessage]);
       
       // Play text-to-speech if enabled
-      if (textToSpeechEnabled && 'speechSynthesis' in window) {
-        speakText(response.data.content);
+      if (textToSpeechEnabled && 'speechSynthesis' in window && aiMessage.character_id) {
+        const voice = characterVoices[aiMessage.character_id];
+        if (voice) speakText(aiMessage.content, voice);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -162,6 +203,7 @@ const Chat: React.FC = () => {
         role: 'assistant',
         content: "Sorry, I couldn't process your message. Please try again.",
         timestamp: new Date().toISOString(),
+        character_id: null,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -195,7 +237,7 @@ const Chat: React.FC = () => {
         recognition.lang = 'en-US';
 
         recognition.onresult = (event: any) => {
-          const transcript = Array.from(event.results)
+          const transcript = Array.from(event.results) 
             .map((result: any) => result[0])
             .map((result) => result.transcript)
             .join('');
@@ -221,13 +263,13 @@ const Chat: React.FC = () => {
   };
 
   // Text-to-speech functionality
-  const speakText = (text: string) => {
-    if (!text || !conversation || !characterVoice) return;
+  const speakText = (text: string, voice: SpeechSynthesisVoice) => {
+    if (!text || !voice) return;
 
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.voice = characterVoice;
-      console.log("Selected voice:", characterVoice.name);
+      utterance.voice = voice;
+      console.log("Selected voice:", voice.name);
 
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
@@ -246,42 +288,43 @@ const Chat: React.FC = () => {
     }
   };
 
-  const toggleTextToSpeech = (text: string) => {
+  const toggleTextToSpeech = (text: string, characterId: number) => {
     if (isPlaying) {
       // Stop playing
       speechSynthesis.cancel();
       setIsPlaying(false);
     } else {
       // Play text as speech
-      speakText(text);
+      const voice = characterVoices[characterId];
+      if (voice) speakText(text, voice);
     }
   };
 
   // Export conversation functionality
-  const exportConversation = () => {
-    if (!conversation) return;
+  const exportWorldChat = () => {
+    if (!world) return; 
     
     const conversationText = [
-      `Conversation with ${conversation.character.name}`,
-      `Created: ${new Date(conversation.created_at).toLocaleString()}`,
+      `World Chat: ${world.name}`,
       '',
-      ...messages.map(msg => 
-        `[${new Date(msg.timestamp).toLocaleString()}] ${msg.role === 'user' ? 'User' : conversation.character.name}: ${msg.content}`
-      )
+      ...messages.map(msg => {
+        const senderName = msg.role === 'user' ? 'User' : world.characters.find(char => char.id === msg.character_id)?.name || 'Unknown';
+        return `[${new Date(msg.timestamp).toLocaleString()}] ${senderName}: ${msg.content}`;
+      })
     ].join('\n');
     
     const blob = new Blob([conversationText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `conversation_${conversation.character.name}_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `world_chat_${world.name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  if (!conversation) {
+  if (!world) {
     return (
       <div className="loading-spinner">
         <div className="spinner"></div>
@@ -296,7 +339,7 @@ const Chat: React.FC = () => {
                 <img src="/vite.svg" alt="Logo" className="logo" />
                 <div className="chat-actions">
                     <ThemeToggle />
-                    <button onClick={exportConversation} className="btn icon-btn">
+                    <button onClick={exportWorldChat} className="btn icon-btn">
                         <ArrowUpTrayIcon style={{width: '20px', height: '20px'}}/>
                     </button>
                     <button onClick={() => setShowSettings(!showSettings)} className="btn icon-btn">
@@ -328,17 +371,33 @@ const Chat: React.FC = () => {
             )}
 
             <div className="chat-messages" ref={chatContainerRef} onScroll={handleScroll}>
-                {messages.map((message) => (
-                <div key={message.id} className={`message ${message.role}`} ref={el => { messageRefs.current[message.id] = el; }}>
-                    {message.role === 'assistant' && <img src={conversation.image_data} alt={conversation.character.name} />}
-                    <div className="content">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
-                </div>
-                ))}
+                {messages.map((message) => {
+                    const senderCharacter = world.characters.find(char => char.id === message.character_id);
+                    return (
+                        <div key={message.id} className={`message ${message.role}`} ref={el => { messageRefs.current[message.id] = el; }}>
+                            {message.role === 'assistant' && senderCharacter && (
+                                <img src={senderCharacter.image_data} alt={senderCharacter.name} />
+                            )}
+                            <div className="content">
+                                {message.role === 'assistant' && senderCharacter && (
+                                    <span className="message-sender-name">{senderCharacter.name}</span>
+                                )}
+                                <ReactMarkdown>{message.content}</ReactMarkdown>
+                                {textToSpeechEnabled && message.role === 'assistant' && senderCharacter && (
+                                    <button 
+                                        onClick={() => toggleTextToSpeech(message.content, senderCharacter.id)}
+                                        className="tts-button"
+                                    >
+                                        {isPlaying ? <SpeakerXMarkIcon style={{width: '16px', height: '16px'}}/> : <SpeakerWaveIcon style={{width: '16px', height: '16px'}}/>}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
                 {isLoading && (
                 <div key="loading" className="message assistant">
-                    <img src={conversation.image_data} alt={conversation.character.name} />
+                    {world.characters[0] && <img src={world.characters[0].image_data} alt={world.characters[0].name} />}
                     <div className="content">
                     <div className="typing-indicator">
                         <span key="dot1"></span>
@@ -385,12 +444,19 @@ const Chat: React.FC = () => {
             <button onClick={() => navigate('/')} className="btn back-btn">
                 <ArrowLeftIcon style={{width: '20px', height: '20px'}}/> Back
             </button>
-            <img src={conversation.image_data} alt={conversation.character.name} />
-            <h2>{conversation.character.name}</h2>
-            <p>{conversation.character.core_memory}</p>
+            <h2>{world.name}</h2>
+            <h3>Characters:</h3>
+            <ul className="world-character-list">
+                {world.characters.map(char => (
+                    <li key={char.id}>
+                        <img src={char.image_data} alt={char.name} style={{width: '30px', height: '30px', borderRadius: '50%', marginRight: '10px'}}/>
+                        {char.name}
+                    </li>
+                ))}
+            </ul>
         </div>
     </div>
   );
 };
 
-export default Chat;
+export default WorldChat;

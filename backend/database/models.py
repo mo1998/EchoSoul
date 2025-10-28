@@ -27,6 +27,9 @@ class Character(Base):
     name = Column(String, index=True, unique=True)
     core_memory = Column(Text)  # Initial description
     adaptive_memory = Column(Text, default="{}") # Stored as a JSON string
+    image_data = Column(Text, nullable=True) # Store Base64 image data
+    voice_id = Column(String, nullable=True) # Store a reference to a voice profile
+    gender = Column(String, nullable=True) # Store the gender of the character
     
     conversations = relationship("Conversation", back_populates="character")
     worlds = relationship("World", secondary=world_characters, back_populates="characters")
