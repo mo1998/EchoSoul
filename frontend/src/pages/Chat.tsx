@@ -95,27 +95,50 @@ const Chat: React.FC = () => {
     }
   }, [conversation, voices, characterVoice]);
 
-  useEffect(() => {
-    if (stickToBottom) {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.role === 'assistant') {
-            const lastMessageElement = messageRefs.current[lastMessage.id];
-            lastMessageElement?.scrollIntoView({ behavior: 'auto', block: 'start' });
-        } else {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        }
+  // Robust scroll-to-bottom: wait for next paint and use container.scrollTo fallback
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const container = chatContainerRef.current;
+    if (container) {
+      // prefer the scroll API (less fragile with layout shifts)
+      try {
+        container.scrollTo({ top: container.scrollHeight, behavior });
+        return;
+      } catch (e) {
+        // Fall back to scrollIntoView if needed
+      }
     }
-  }, [messages, stickToBottom]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
+
+  useEffect(() => {
+    if (!stickToBottom) return;
+
+    // defer to the next animation frame so newly-mounted message DOM is present
+    const raf = requestAnimationFrame(() => {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === 'assistant') {
+        const lastMessageElement = messageRefs.current[lastMessage.id];
+        if (lastMessageElement) {
+          // If we have a direct element, try to scroll it into view. If not, fallback to container
+          try {
+            lastMessageElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            return;
+          } catch (e) { /* ignore and fallback */ }
+        }
+      }
+      // fallback scroll to bottom
+      scrollToBottom('auto');
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [messages, stickToBottom]);
 
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (container) {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const atBottom = scrollHeight - scrollTop - clientHeight <= 5;
+      // Slightly larger tolerance to account for fractional pixels/layout shifts
+      const atBottom = scrollHeight - scrollTop - clientHeight <= 20;
       setStickToBottom(atBottom);
     }
   };
@@ -137,6 +160,9 @@ const Chat: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
+
+    // ensure UI scrolls to show the optimistic user's message
+    requestAnimationFrame(() => scrollToBottom('smooth'));
 
     try {
       const response = await sendMessage(Number(id), messageToSend);
@@ -166,6 +192,8 @@ const Chat: React.FC = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      // final ensure: scroll after the assistant message has been appended/painted
+      requestAnimationFrame(() => scrollToBottom('smooth'));
     }
   };
 
@@ -354,7 +382,7 @@ const Chat: React.FC = () => {
             {!stickToBottom && (
                 <button 
                     onClick={() => {
-                        scrollToBottom();
+                        scrollToBottom('smooth');
                         setStickToBottom(true);
                     }}
                     className="btn scroll-to-bottom-btn"

@@ -159,9 +159,11 @@
     gap: 20px;
 }
 
+/* Make container positioned so absolute/sticky elements behave predictably */
 .chat-container {
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 
 .chat-header {
@@ -173,6 +175,7 @@
     border-bottom: 1px solid var(--panel-border);
 }
 
+/* Chat message area: improved scrolling behavior & padding to keep last message visible */
 .chat-messages {
     flex-grow: 1;
     overflow-y: auto;
@@ -181,6 +184,12 @@
     display: flex;
     flex-direction: column;
     gap: 15px;
+
+    /* Improvements for smoother/safer scrolling */
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    /* ensure last messages aren't hidden behind input/footer */
+    scroll-padding-bottom: 140px;
 }
 
 .message {
@@ -232,9 +241,15 @@
 }
 
 /* Chat Input */
+/* Make input sticky so it remains visible and doesn't overlap messages unexpectedly */
 .chat-input {
     display: flex;
     gap: 10px;
+    position: sticky;
+    bottom: 16px;
+    background: transparent;
+    padding-top: 8px;
+    z-index: 5;
 }
 
 .chat-input input {

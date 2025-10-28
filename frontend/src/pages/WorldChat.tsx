@@ -89,8 +89,8 @@ const WorldChat: React.FC = () => {
   useEffect(() => {
     if (world && voices.length > 0) {
       const newCharacterVoices: {[key: number]: SpeechSynthesisVoice | null} = {};
-      const maleVoiceNames = ['Microsoft David - English (United States)', 'Microsoft Mark - English (United States)', 'Microsoft William Online (Natural) - English (Australia)', 'Microsoft Liam Online (Natural) - English (Canada)', 'Microsoft Sam Online (Natural) - English (Hongkong)', 'Microsoft Prabhat Online (Natural) - English (India)', 'Microsoft Connor Online (Natural) - English (Ireland)', 'Microsoft Chilemba Online (Natural) - English (Kenya)', 'Microsoft Mitchell Online (Natural) - English (New Zealand)', 'Microsoft Abeo Online (Natural) - English (Nigeria)', 'Microsoft James Online (Natural) - English (Philippines)', 'Microsoft Wayne Online (Natural) - English (Singapore)', 'Microsoft AndrewMultilingual Online (Natural) - English (United States)', 'Microsoft BrianMultilingual Online (Natural) - English (United States)', 'Microsoft Andrew Online (Natural) - English (United States)', 'Microsoft Brian Online (Natural) - English (United States)', 'Microsoft Luke Online (Natural) - English (South Africa)', 'Microsoft Elimu Online (Natural) - English (Tanzania)', 'Microsoft Ryan Online (Natural) - English (United Kingdom)', 'Microsoft Thomas Online (Natural) - English (United Kingdom)', 'Microsoft Christopher Online (Natural) - English (United States)', 'Microsoft Eric Online (Natural) - English (United States)', 'Microsoft Guy Online (Natural) - English (United States)', 'Microsoft Roger Online (Natural) - English (United States)', 'Microsoft Steffan Online (Natural) - English (United States)'];
-      const femaleVoiceNames = ['Microsoft Zira - English (United States)', 'Microsoft Natasha Online (Natural) - English (Australia)', 'Microsoft Clara Online (Natural) - English (Canada)', 'Microsoft Yan Online (Natural) - English (Hong Kong SAR)', 'Microsoft Neerja Online (Natural) - English (India) (Preview)', 'Microsoft Neerja Online (Natural) - English (India)', 'Microsoft Emily Online (Natural) - English (Ireland)', 'Microsoft Asilia Online (Natural) - English (Kenya)', 'Microsoft Molly Online (Natural) - English (New Zealand)', 'Microsoft Ezinne Online (Natural) - English (Nigeria)', 'Microsoft Rosa Online (Natural) - English (Philippines)', 'Microsoft Luna Online (Natural) - English (Singapore)', 'Microsoft AvaMultilingual Online (Natural) - English (United States)', 'Microsoft EmmaMultilingual Online (Natural) - English (United States)', 'Microsoft Ava Online (Natural) - English (United States)', 'Microsoft Emma Online (Natural) - English (United States)', 'Microsoft Leah Online (Natural) - English (South Africa)', 'Microsoft Imani Online (Natural) - English (Tanzania)', 'Microsoft Libby Online (Natural) - English (United Kingdom)', 'Microsoft Maisie Online (Natural) - English (United Kingdom)', 'Microsoft Sonia Online (Natural) - English (United Kingdom)', 'Microsoft Ana Online (Natural) - English (United States)', 'Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Jenny Online (Natural) - English (United States)', 'Microsoft Michelle Online (Natural) - English (United States)'];
+      const maleVoiceNames = ['Microsoft David - English (United States)', 'Microsoft Mark - English (United States)', 'Microsoft William Online (Natural) - English (Australia)', 'Microsoft Liam O[...'];
+      const femaleVoiceNames = ['Microsoft Zira - English (United States)', 'Microsoft Natasha Online (Natural) - English (Australia)', 'Microsoft Clara Online (Natural) - English (Canada)', 'Micr[...'];
 
       const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
 
@@ -101,8 +101,8 @@ const WorldChat: React.FC = () => {
         const male_keywords = ['male', 'man', 'boy', 'he', 'his', 'him', 'father', 'son', 'brother', 'uncle', 'nephew', 'king', 'prince'];
         const female_keywords = ['female', 'woman', 'girl', 'she', 'her', 'hers', 'mother', 'daughter', 'sister', 'aunt', 'niece', 'queen', 'princess'];
 
-        const male_score = sum(male_keywords.map(word => (description.match(new RegExp(`\b${word}\b`, 'gi')) || []).length));
-        const female_score = sum(female_keywords.map(word => (description.match(new RegExp(`\b${word}\b`, 'gi')) || []).length));
+        const male_score = sum(male_keywords.map(word => (description.match(new RegExp(`\\b${word}\\b`, 'gi')) || []).length));
+        const female_score = sum(female_keywords.map(word => (description.match(new RegExp(`\\b${word}\\b`, 'gi')) || []).length));
 
         let gender = "neutral";
         if (male_score > female_score) {
@@ -124,27 +124,45 @@ const WorldChat: React.FC = () => {
     }
   }, [world, voices]);
 
-  useEffect(() => {
-    if (stickToBottom) {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.role === 'assistant') {
-            const lastMessageElement = messageRefs.current[lastMessage.id];
-            lastMessageElement?.scrollIntoView({ behavior: 'auto', block: 'start' });
-        } else {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        }
+  // Robust scroll-to-bottom: prefer container.scrollTo and defer to next frame
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    const container = chatContainerRef.current;
+    if (container) {
+      try {
+        container.scrollTo({ top: container.scrollHeight, behavior });
+        return;
+      } catch (e) {
+        // fallback
+      }
     }
-  }, [messages, stickToBottom]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
+
+  useEffect(() => {
+    if (!stickToBottom) return;
+
+    const raf = requestAnimationFrame(() => {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage?.role === 'assistant') {
+        const lastMessageElement = messageRefs.current[lastMessage.id];
+        if (lastMessageElement) {
+          try {
+            lastMessageElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            return;
+          } catch (e) { /* ignore and fallback */ }
+        }
+      }
+      scrollToBottom('auto');
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [messages, stickToBottom]);
 
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (container) {
       const { scrollTop, scrollHeight, clientHeight } = container;
-      const atBottom = scrollHeight - scrollTop - clientHeight <= 5;
+      const atBottom = scrollHeight - scrollTop - clientHeight <= 20;
       setStickToBottom(atBottom);
     }
   };
@@ -178,6 +196,9 @@ const WorldChat: React.FC = () => {
     setInputMessage('');
     setIsLoading(true);
 
+    // optimistic scroll
+    requestAnimationFrame(() => scrollToBottom('smooth'));
+
     try {
       const response = await sendWorldMessage(worldId, messageToSend);
       
@@ -208,6 +229,8 @@ const WorldChat: React.FC = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      // ensure final scroll after assistant arrives
+      requestAnimationFrame(() => scrollToBottom('smooth'));
     }
   };
 
@@ -413,7 +436,7 @@ const WorldChat: React.FC = () => {
             {!stickToBottom && (
                 <button 
                     onClick={() => {
-                        scrollToBottom();
+                        scrollToBottom('smooth');
                         setStickToBottom(true);
                     }}
                     className="btn scroll-to-bottom-btn"

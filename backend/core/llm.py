@@ -6,7 +6,7 @@ from crewai import LLM # Import LLM from crewai
 load_dotenv(find_dotenv())
 
 client = LLM(
-    model="groq/openai/gpt-oss-20b", # Specify the Groq model
+    model="groq/llama-3.1-8b-instant", # Specify the Groq model
     temperature=0.7,
     max_tokens=4096,
     timeout=300
