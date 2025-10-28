@@ -59,10 +59,11 @@ def create_message_for_world(world_id: int, message: ChatMessageRequest, db: Ses
         )
         character_agents.append(agent)
 
+    json_example = json.dumps({"character_name": "[Name]", "response": "[Response]"})
     # Create a director agent
     director = Agent(
         role="Director",
-        goal="Analyze the user's message and the conversation history, then select ONE character to respond. Output the chosen character's name and their response in JSON format: {'character_name': '[Name]', 'response': '[Response]'}",
+        goal=f"Analyze the user's message and the conversation history, then select ONE character to respond. Output the chosen character's name and their response in JSON format: {json_example}",
         backstory="You are the director of a multi-character conversation. Your job is to ensure the conversation flows naturally and that the characters respond appropriately by selecting the best character to reply.",
         allow_delegation=True,
         verbose=True,
@@ -71,7 +72,7 @@ def create_message_for_world(world_id: int, message: ChatMessageRequest, db: Ses
 
     # Create a task for the director to choose a character and get their response
     director_task = Task(
-        description=f"Given the user's message: '{message.user_message}', and the available characters: {', '.join([c.name for c in db_world.characters])}. Choose the most appropriate character to respond and generate their response. Output in JSON format: {{'character_name': '[Name]', 'response': '[Response]'}}",
+        description=f"Given the user's message: '{message.user_message}', and the available characters: {', '.join([c.name for c in db_world.characters])}. Choose the most appropriate character to respond and generate their response. Output in JSON format: {json_example}",
         expected_output="A JSON object containing the chosen character's name and their response.",
         agent=director
     )
@@ -84,24 +85,34 @@ def create_message_for_world(world_id: int, message: ChatMessageRequest, db: Ses
     )
 
     # Kick off the crew
-    result_json_str = str(crew.kickoff()) 
-    logger.info(f"Crew kickoff result: {result_json_str}")
-
     try:
+        result_json_str = str(crew.kickoff())
+        logger.info(f"Crew kickoff result: {result_json_str}")
+
         # Attempt to parse the JSON output from the director
         parsed_result = json.loads(result_json_str)
         responding_character_name = parsed_result.get("character_name")
         ai_message_content = parsed_result.get("response")
 
         if not responding_character_name or not ai_message_content:
-            raise ValueError("Director did not return expected JSON format.")
+            raise ValueError("Director did not return a valid character name and response.")
 
     except json.JSONDecodeError:
         logger.error(f"Failed to decode JSON from crew result: {result_json_str}")
-        raise HTTPException(status_code=500, detail="AI Director returned malformed JSON.")
-    except ValueError as e:
-        logger.error(f"Error parsing director's output: {e}")
-        raise HTTPException(status_code=500, detail=f"Error parsing director's output: {e}")
+        # Fallback: treat the raw output as the message
+        ai_message_content = result_json_str
+        # Decide which character should be credited with the fallback message
+        # For simplicity, let's pick the first character or handle as you see fit
+        if db_world.characters:
+            responding_character_name = db_world.characters[0].name
+        else:
+            # Handle case with no characters, maybe by creating a generic response
+            # This case should ideally not be reached if worlds must have characters
+            raise HTTPException(status_code=500, detail="AI Director failed and no characters available for fallback.")
+
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during crew kickoff or processing: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
     responding_character = crud_character.get_character_by_name(db, name=responding_character_name)
     if not responding_character:

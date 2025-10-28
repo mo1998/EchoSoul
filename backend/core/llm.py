@@ -7,7 +7,9 @@ load_dotenv(find_dotenv())
 
 client = LLM(
     model="groq/openai/gpt-oss-20b", # Specify the Groq model
-    temperature=0.7
+    temperature=0.7,
+    max_tokens=4096,
+    timeout=300
 )
 
 if not os.getenv("GROQ_API_KEY"):
