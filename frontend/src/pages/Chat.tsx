@@ -322,7 +322,7 @@ const Chat: React.FC = () => {
         <div className="chat-container">
             <div className="chat-header">
                 <img src="/vite.svg" alt="Logo" className="logo" />
-                <div className="chat-actions">
+                <div className="dashboard-actions">
                     <ThemeToggle />
                     <button onClick={exportConversation} className="btn icon-btn">
                         <ArrowUpTrayIcon style={{width: '20px', height: '20px'}}/>

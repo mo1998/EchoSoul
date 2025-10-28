@@ -71,12 +71,16 @@ const CharacterCreator: React.FC = () => {
 
   return (
     <div className="character-creator">
-      <div className="character-creator-header">
-        <button onClick={() => navigate('/')} className="btn back-btn">
-          <ArrowLeftIcon style={{width: '20px', height: '20px'}} /> Back
-        </button>
-        <h1>Create Your Character</h1>
-        <ThemeToggle />
+      <div className="dashboard-header">
+        <div>
+          <h1>Create Your Character</h1>
+        </div>
+        <div className="dashboard-actions">
+          <ThemeToggle />
+          <button onClick={() => navigate('/')} className="btn back-btn">
+            <ArrowLeftIcon style={{width: '20px', height: '20px'}} /> Back
+          </button>
+        </div>
       </div>
 
       <div className="creator-content">
